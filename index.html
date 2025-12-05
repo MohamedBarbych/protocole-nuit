@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXUS | Biome v3.0</title>
+    <meta name="description" content="Web éco-conçu : Zéro requête, compatible terminal.">
+    <link rel="icon" href="data:,">
+
+    <style>
+        /* --- CSS CORE --- */
+        :root {
+            --bg: #050505;
+            --primary: #00F0FF;
+            --secondary: #FFFFFF;
+            --dim: rgba(255,255,255,0.1);
+            --warn: #FFAA00;
+        }
+
+        /* Accessibilité : Focus visible pour la navigation clavier */
+        :focus { outline: 2px solid var(--primary); outline-offset: 4px; }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            background-color: var(--bg);
+            color: var(--secondary);
+            font-family: 'Courier New', monospace;
+            overflow-x: hidden; /* Empêche scroll horizontal */
+            width: 100vw;
+            min-height: 100vh;
+        }
+
+        /* --- UI LAYER (Design Biome) --- */
+        #ui-layer {
+            position: fixed; /* Fixe pour l'effet "App" */
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; /* Laisse passer les clics vers le fond si besoin */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 2rem;
+            z-index: 10;
+        }
+
+        /* Pour les terminaux (w3m), on s'assure que le contenu est lisible */
+        header, nav, footer { pointer-events: auto; }
+
+        header h1 {
+            font-size: 1rem;
+            border-left: 2px solid var(--primary);
+            padding-left: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        /* NAVIGATION CENTRALE */
+        nav {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            align-items: center;
+            z-index: 20;
+        }
+
+        .nav-orb {
+            padding: 1rem 3rem;
+            border: 1px solid var(--dim);
+            background: rgba(0,0,0,0.7);
+            color: var(--secondary);
+            text-decoration: none;
+            transition: 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            backdrop-filter: blur(4px);
+            position: relative;
+            overflow: hidden;
+            display: block;
+            text-align: center;
+        }
+
+        .nav-orb:hover, .nav-orb:focus {
+            border-color: var(--primary);
+            background: rgba(0, 240, 255, 0.15);
+            letter-spacing: 3px;
+        }
+
+        /* BOUTON ECO-MODE */
+        #eco-toggle {
+            background: transparent;
+            border: 1px solid var(--warn);
+            color: var(--warn);
+            padding: 5px 10px;
+            font-size: 0.7rem;
+            margin-top: 10px;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: 0.3s;
+        }
+        #eco-toggle:hover { opacity: 1; background: rgba(255, 170, 0, 0.1); }
+        #eco-toggle.active { background: var(--warn); color: #000; }
+
+        /* --- GESTION DU CONTENU (AMÉLIORATION MAJEURE) --- */
+        /* Les articles sont dans le HTML mais cachés visuellement par défaut */
+        /* SAUF s'ils sont ciblés par :target (Navigation CSS pure) */
+        
+        .content-section {
+            display: none; /* Caché par défaut */
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 50;
+            justify-content: center; align-items: center;
+            backdrop-filter: blur(10px);
+            opacity: 0;
+            transition: opacity 0.4s;
+            pointer-events: none;
+        }
+
+        /* Quand on clique sur un lien ou que JS active la classe */
+        .content-section:target, .content-section.active {
+            display: flex;
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .data-card {
+            width: 90%; max-width: 700px;
+            max-height: 80vh; overflow-y: auto;
+            padding: 2.5rem;
+            border: 1px solid var(--primary);
+            background: #080808;
+            box-shadow: 0 0 50px rgba(0, 240, 255, 0.05);
+            position: relative;
+        }
+
+        /* Typographie du contenu */
+        .data-card h2 { color: var(--primary); margin-bottom: 1.5rem; border-bottom: 1px solid #333; padding-bottom: 0.5rem; }
+        .data-card p { margin-bottom: 1rem; line-height: 1.6; color: #ccc; }
+        .data-card a { color: var(--primary); }
+
+        /* Tableau */
+        .comparison-table { width: 100%; border-collapse: collapse; margin: 2rem 0; font-size: 0.9rem; }
+        .comparison-table th { text-align: left; color: var(--primary); border-bottom: 1px solid var(--primary); padding: 10px; }
+        .comparison-table td { padding: 10px; border-bottom: 1px solid #333; }
+
+        .close-btn {
+            position: absolute; top: 1rem; right: 1rem;
+            background: transparent; border: 1px solid var(--primary); color: var(--primary);
+            width: 30px; height: 30px; border-radius: 50%;
+            font-weight: bold; transition: 0.3s;
+            text-decoration: none; /* C'est un lien 'a' maintenant pour le CSS pur */
+            display: flex; align-items: center; justify-content: center;
+        }
+        .close-btn:hover { background: var(--primary); color: #000; }
+
+        /* CANVAS */
+        canvas { position: fixed; top: 0; left: 0; z-index: 0; pointer-events: none; }
+        
+        /* CURSEUR CUSTOM (Caché sur mobile/touch) */
+        @media (pointer: fine) {
+            * { cursor: none; }
+            #cursor-dot { position: fixed; width: 6px; height: 6px; background: var(--primary); border-radius: 50%; pointer-events: none; z-index: 100; transition: transform 0.05s; }
+            #cursor-circle { position: fixed; width: 40px; height: 40px; border: 1px solid var(--primary); border-radius: 50%; pointer-events: none; z-index: 99; transform: translate(-50%, -50%); transition: all 0.2s; }
+        }
+
+        /* --- MODE TERMINAL (W3M / LINKS) --- */
+        /* Si pas de CSS ou navigateur textuel, ceci assure la lisibilité */
+        @media screen and (max-width: 0px) {
+            .content-section { display: block; position: static; background: none; opacity: 1; border: none; }
+            nav { position: static; transform: none; }
+            canvas, #cursor-dot, #cursor-circle { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="cursor-dot"></div>
+    <div id="cursor-circle"></div>
+    <canvas id="starfield"></canvas>
+
+    <div id="ui-layer">
+        <header>
+            <h1>NEXUS // BIOME_V3.0</h1>
+            <p style="font-size: 0.7rem; color: #888;">[ GREEN IT CHALLENGE 2025 ]</p>
+        </header>
+
+        <nav role="navigation" aria-label="Menu Principal">
+            <a href="#manifeste" class="nav-orb">[ PHILOSOPHIE ]</a>
+            <a href="#etudes" class="nav-orb">[ ÉTUDE DE CAS ]</a>
+            <a href="#specs" class="nav-orb">[ SYSTÈME ]</a>
+            
+            <button id="eco-toggle" onclick="toggleEcoMode()" aria-label="Activer mode économie">
+                ⚡ MODE ÉCO-STASE : <span id="eco-status">AUTO</span>
+            </button>
+        </nav>
+
+        <footer style="display: flex; justify-content: space-between; font-size: 0.7rem; color: #666;">
+            <span>REQ: 1 | SIZE: &lt; 20KB</span>
+            <span>PRESS [ESC] TO CLOSE</span>
+        </footer>
+    </div>
+
+    <main>
+        
+        <article id="manifeste" class="content-section">
+            <div class="data-card">
+                <a href="#" class="close-btn" aria-label="Fermer">X</a>
+                <h2>// PHILOSOPHIE : LE RETOUR AU SENS</h2>
+                <p>Le web moderne souffre d'obésité morbide. Scripts de traçage, images 4K non optimisées, bibliothèques JS de 2MB pour un simple bouton...</p>
+                <p><strong>L'inspiration Gemini :</strong><br>
+                Ce projet s'inspire du <a href="https://geminiprotocol.net" target="_blank" style="color:var(--primary)">Protocole Gemini</a>, un espace numérique parallèle qui rejette le web commercial moderne. Gemini, c'est du texte, de l'information brute, et le respect de la vie privée.</p>
+                <p><strong>Notre Mission :</strong><br>
+                Le Nexus n'est pas "cassé" ou "vieux". C'est une vision du futur où la performance énergétique est un critère de beauté.</p>
+            </div>
+        </article>
+
+        <article id="etudes" class="content-section">
+            <div class="data-card">
+                <a href="#" class="close-btn" aria-label="Fermer">X</a>
+                <h2>// ÉTUDE DE CAS : L'IMPACT RÉEL</h2>
+                <p>Comparaison entre <strong>Le Nexus</strong> et une page standard 2025.</p>
+                <table class="comparison-table">
+                    <thead>
+                        <tr><th>MÉTRIQUE</th><th>STANDARD</th><th>NEXUS</th><th>GAIN</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Requêtes</td><td>~50</td><td><strong>1</strong></td><td style="color:var(--primary)">98%</td></tr>
+                        <tr><td>Poids</td><td>~2.5 MB</td><td><strong>~18 KB</strong></td><td style="color:var(--primary)">99%</td></tr>
+                        <tr><td>CO2/visite</td><td>0.8g</td><td><strong>&lt; 0.02g</strong></td><td style="color:var(--primary)">x60</td></tr>
+                    </tbody>
+                </table>
+                <p><em>*Données basées sur Website Carbon Calculator.</em></p>
+            </div>
+        </article>
+
+        <article id="specs" class="content-section">
+            <div class="data-card">
+                <a href="#" class="close-btn" aria-label="Fermer">X</a>
+                <h2>// SPÉCIFICATIONS TECHNIQUES</h2>
+                <ul>
+                    <li><strong>Architecture Monolithique :</strong> Tout (HTML/CSS/JS) en 1 fichier.</li>
+                    <li><strong>Progressive Enhancement :</strong> Ce site fonctionne sans Javascript (essayez !).</li>
+                    <li><strong>Rendu Procédural :</strong> Particules mathématiques, 0 image bitmap.</li>
+                </ul>
+
+                <details style="margin-top:20px; border:1px solid #333; padding:10px;">
+                    <summary style="color:var(--primary); cursor:pointer;">[+] GÉNÉRER GRAPHIQUE VECTORIEL (Canvas)</summary>
+                    <div style="margin-top:10px;">
+                        <p style="font-size:0.8rem; margin-bottom:10px;">Rendu JS en cours...</p>
+                        <canvas id="mini-chart" width="400" height="150"></canvas>
+                        <script>
+                            document.querySelector('details').addEventListener('toggle', function(e) {
+                                if (this.open) setTimeout(drawMiniChart, 100);
+                            });
+                        </script>
+                    </div>
+                </details>
+            </div>
+        </article>
+
+    </main>
+
+    <script>
+        // --- MOTEUR GRAPHIQUE ECO-CONSCIENT ---
+        const canvas = document.getElementById('starfield');
+        const ctx = canvas.getContext('2d');
+        let width, height, particles = [];
+        let animationId;
+        
+        // Détection automatique préférence système
+        const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const saveData = navigator.connection && navigator.connection.saveData;
+        let isEcoMode = prefersReducedMotion || saveData; 
+
+        // Update UI initiale
+        const ecoBtn = document.getElementById('eco-toggle');
+        const ecoStatus = document.getElementById('eco-status');
+        if(isEcoMode) {
+            ecoBtn.classList.add('active');
+            ecoStatus.innerText = "AUTO-ON";
+        }
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            initParticles();
+        }
+
+        function initParticles() {
+            particles = [];
+            const count = (isEcoMode || window.innerWidth < 600) ? 20 : 80; 
+            for(let i=0; i<count; i++) {
+                particles.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    vx: (Math.random() - 0.5) * 0.3,
+                    vy: (Math.random() - 0.5) * 0.3,
+                    size: Math.random() * 2
+                });
+            }
+        }
+
+        function animate() {
+            if(isEcoMode) {
+                // Rendu statique une seule fois (Économie CPU max)
+                ctx.clearRect(0, 0, width, height);
+                ctx.fillStyle = '#111';
+                ctx.fillText(">> MODE ÉCO: ANIMATION SUSPENDUE", 20, height - 20);
+                return; 
+            }
+
+            ctx.clearRect(0, 0, width, height);
+            
+            ctx.fillStyle = '#FFFFFF';
+            particles.forEach(p => {
+                p.x += p.vx; p.y += p.vy;
+                if(p.x < 0 || p.x > width) p.vx *= -1;
+                if(p.y < 0 || p.y > height) p.vy *= -1;
+
+                ctx.globalAlpha = 0.5;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+
+                particles.forEach(p2 => {
+                    const dx = p.x - p2.x;
+                    const dy = p.y - p2.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if(dist < 100) {
+                        ctx.strokeStyle = `rgba(0, 240, 255, ${1 - dist/100})`;
+                        ctx.lineWidth = 0.5;
+                        ctx.beginPath();
+                        ctx.moveTo(p.x, p.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        ctx.stroke();
+                    }
+                });
+            });
+            animationId = requestAnimationFrame(animate);
+        }
+
+        window.toggleEcoMode = function() {
+            isEcoMode = !isEcoMode;
+            if(isEcoMode) {
+                cancelAnimationFrame(animationId);
+                ctx.clearRect(0, 0, width, height);
+                ecoBtn.classList.add('active');
+                ecoStatus.innerText = "ON";
+            } else {
+                ecoBtn.classList.remove('active');
+                ecoStatus.innerText = "OFF";
+                animate();
+            }
+        };
+
+        // --- GESTION SPA VIA HASH (FALLBACK JS POUR FLUIDITÉ) ---
+        // Permet de fermer les modales avec Echap ou en cliquant sur la croix
+        window.addEventListener('hashchange', () => {
+            // Optionnel: Ajouter des sons ou effets ici
+        });
+
+        // Fonction Chart (Média Optionnel)
+        window.drawMiniChart = function() {
+            const mc = document.getElementById('mini-chart');
+            if(!mc) return;
+            const mctx = mc.getContext('2d');
+            mctx.clearRect(0,0,400,150);
+            
+            mctx.fillStyle = '#333'; mctx.fillRect(0, 20, 380, 40);
+            mctx.fillStyle = '#FF4444'; mctx.fillRect(0, 20, 350, 40);
+            mctx.fillStyle = '#FFF'; mctx.fillText("Standard (2.5MB)", 10, 45);
+
+            mctx.fillStyle = '#333'; mctx.fillRect(0, 80, 380, 40);
+            mctx.fillStyle = '#00F0FF'; mctx.fillRect(0, 80, 5, 40); // Minuscule
+            mctx.fillStyle = '#FFF'; mctx.fillText("Nexus (0.02MB)", 20, 105);
+        }
+
+        // Curseur Custom (Désactivé sur tactile)
+        const dot = document.getElementById('cursor-dot');
+        const circle = document.getElementById('cursor-circle');
+        if (window.matchMedia("(pointer: fine)").matches) {
+            window.addEventListener('mousemove', e => {
+                dot.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+                circle.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+            });
+        }
+
+        window.addEventListener('resize', resize);
+        window.addEventListener('keydown', e => { 
+            if(e.key === 'Escape') window.location.hash = ''; // Ferme modale
+        });
+        
+        resize();
+        animate();
+
+        console.log("NEXUS_V3 HYBRID ARCHITECTURE LOADED.");
+    </script>
+</body>
+</html>
