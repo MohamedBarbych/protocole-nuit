@@ -1,8 +1,9 @@
 # GeminiWeb - Le web qui trace, sans traces
 
 Projet d'éco-conception web inspiré du protocole Gemini. Application Python Flask ultra-minimaliste.
+https://protocole-gemini.netlify.app/
 
-## 🎯 Objectif
+##  Objectif
 
 Créer une application web ultra-légère, accessible et respectueuse de l'environnement avec Python Flask, démontrant qu'il est possible de proposer du contenu de qualité sans compromettre la performance, l'accessibilité ou l'impact écologique.
 
